@@ -74,13 +74,11 @@ def get_cooling_function():
     
     assert T.size == Lambda.size, 'Mismatch in cooling function tables'
 
-    lol = interpolate.interp1d(T,
+  
+    return interpolate.interp1d(T,
                                 Lambda, 
                                 fill_value = 0.0,
                                 )
-    plt.plot(T, lol(T), 'o')
-    plt.show()
-    
 
     
 
