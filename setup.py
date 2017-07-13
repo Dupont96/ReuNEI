@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
 
-setup(name="SunNEI",
+setup(name="ReuNEI",
       version="0.0.1",
       description="Non-equilibrium ionization modeling in the solar corona and wind",
       url="https://github.com/namurphy/SunNEI",

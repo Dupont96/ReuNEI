@@ -3,6 +3,7 @@
 from __future__ import print_function
 import numpy as np
 from scipy import interpolate
+import matplotlib.pyplot as plt
 
 #>>> import matplotlib.pyplot as plt
 
@@ -73,11 +74,13 @@ def get_cooling_function():
     
     assert T.size == Lambda.size, 'Mismatch in cooling function tables'
 
-    return interpolate.interp1d(T,
+    lol = interpolate.interp1d(T,
                                 Lambda, 
                                 fill_value = 0.0,
                                 )
-
+    plt.plot(T, lol(T), 'o')
+    plt.show()
+    
 
     
 

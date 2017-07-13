@@ -8,7 +8,8 @@ from .core import \
     create_ChargeStates_dictionary, \
     ReformatChargeStateList, \
     EquilChargeStates, \
-    get_cooling_function
+    get_cooling_function,\
+    atomdb_cooling
 
 from .tests import test_read_atomic_data, \
     test_create_ChargeStates_dictionary

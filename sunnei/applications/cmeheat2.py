@@ -3,6 +3,7 @@ CMEheat
 =====
 This module contains non-equilibrium ionization routines to
 investigate the heating of coronal mass ejection (CME) plasma.
+
 """
 
 from __future__ import print_function
@@ -11,10 +12,20 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
+import pyatomdb
+import glob
+import xarray as xr
+import sys
+import os
 
+from astropy.io import fits
 from sunnei.core import func_index_te, func_dt_eigenval, func_solver_eigenval
 from sunnei.core import read_atomic_data, create_ChargeStates_dictionary, \
-    ReformatChargeStateList, EquilChargeStates, get_cooling_function
+    ReformatChargeStateList, EquilChargeStates, get_cooling_function\
+
+from pyatomdb.atomdb import get_data, lorentz_neicsd, lorentz_power
+from pyatomdb.apec import solve_ionbal_eigen
+
 
 # Definining constants
 
@@ -22,6 +33,11 @@ RSun = 6.957e5    # radius of the Sun in kilometers
 gamma = 5.0/3.0   # ratio of specific heats
 gamm1 = gamma-1.0 # 
 kB = 1.38e-16     # Boltman constant in ergs per Kelvin
+
+Belements = ['H', 'He', 'C', 
+            'N', 'O', 'Ne',
+            'Mg', 'Si', 'S', 
+            'Ar', 'Ca', 'Fe']
 
 # This pandas series allows a shortcut to finding the atomic number of
 # an element.  For example, AtomicNumbers['Fe'] will return 26.  The
@@ -39,9 +55,9 @@ AtomicNumbers = pd.Series(np.arange(28)+1,
 # number of Helium atoms per Hydrogen atom, regardless of ionization state
 
 He_per_H = 0.1 
+dcache = {}
 
-
-def cmeheat_track_plasma(
+def cmeheat_track_plasma2(
     initial_height       = 0.1,     # in solar radii
     final_height         = 5.0,     # height to output charge states
     log_initial_temp     = 6.0,     # logarithm of initial temperature in K
@@ -67,7 +83,7 @@ def cmeheat_track_plasma(
 
     Example
 
-    output = sunnei.cmeheat_track_plasma(log_initial_temp=6.4, 
+    output = cmeheat_track_plasma2(log_initial_temp=6.4, 
                                         log_initial_dens=8.6,
                                         vfinal=2500.0,
                                         ExpansionExponent=-2.5)
@@ -178,54 +194,97 @@ def cmeheat_track_plasma(
         -Use photoionization to set lowest temperature somehow?
     '''
 
+
+
     # Check to make sure that realistic values for the inputs are
     # being used.  Suggest appropriate ranges, if needed.
- 
-    assert 0.01 <= initial_height <= 0.5, \
-        'Choose an initial height between 0.01 and 0.5 RSun'+\
-        '(from 0.05 to 0.1 is best)'
 
-    assert initial_height < final_height, \
-        'Need initial_height < final_height'
+    while True:
+        try:
+            0.01 <= initial_height <= 0.5
+            break
+        except ValueError:
+            print("Initial height needs to be between 0.01 and 0.5 Solar Radii")
+        
+        try:
+            initial_height < final_height
+            break
+        except ValueError:
+            print("The intial_height needs to be less than the final_height")
+        
+        try:
+            50.0 <= vinfal <= 5000.0
+            break
+        except ValueError:
+            print("vfinal needs to be between 50.0 and 5000.0 km/s")
+        
+        try:
+            4.0 <= log_initial_temp <= 8.0
+            break
+        except ValueError:
+            print("Need log_initial_temp to be between 3.6 and 8.0")
+        
+        try:
+            elements.__contains__('H')
+            break
+        except:
+            print("The elements list must contain H to calculate electron density")
 
-    assert 50.0 <= vfinal <= 5000.0, \
-        'Need vfinal between 50.0 and 5000.0 km/s (from 250 to 2500 km/s is best)'
+        try:
+            elements.__contains__('He')
+            break
+        except:
+            print("The elements list must contain He to calculate electron density")
 
-    if RadiativeCooling:
-        assert floor_log_temp >= 4.0, \
-            'If RadiativeCooling==True, then floor_log_temp must be at least 4.0'
-    
-    assert 4.0 <= log_initial_temp <= 8.0, \
-        'Need log_initial_temp between 3.6 and 8.0 (from 4.6 to 7.0 is best)'
-    
-    assert elements.__contains__('H'), \
-        'The elements list must include H to calculate electron density'
-    
-    assert elements.__contains__('He'), \
-        'The elements list must include He to calculate electron density'
-    
-    assert -4.5 <= ExpansionExponent <= -0.5, \
-        'Need ExpansionExponent between -4.5 and -0.5 (usually between -3.0 and -2.0)'
-    
-    assert quicklook == True or quicklook == False or \
-        quicklook.endswith('.pdf'), \
-        'Need quicklook to be True or False or a string ending in .pdf'
-    
-    assert barplot == True or barplot == False or \
-        barplot.endswith('.pdf'), \
-        'Need barplot to be True or False or a string ending in .pdf'
+        try:
+            -4.5 <= ExpansionExponent <= -0.5
+            break
+        except ValueError:
+            print("Need ExpansionExponent to be between -4.5 and -0.5")
+        
+        try:
+            quicklook == True or quicklook==False or \
+            quicklook.endswith('.pdf')
+            break
+        except TypeError:
+            print("Need quicklook to be True or False or a string ending in .pdf")
 
-    assert log_initial_temp>=floor_log_temp, \
-        'Need log_initial_temp >= floor_log_temp'
+        try:
+            barplot == True or barplot == False or \
+            barplot.endswith('.pdf')
+            break
+        except TypeError:
+            print("Need barplot to be True or False or a string ending in .pdf")
+        
+        try:
+            log_initial_temp >= floor_log_temp
+            break
+        except ValueError:
+            print("Need log_intial_temp to be greater than or equal to floor_log_temp")
 
-    assert 0 < safety_factor <= 25, \
-        'Need safety_factor to be a scalar between 0 and 25 (usually between 0.1 and 2)'
+        try:
+            0 < safety_factor <= 25
+            break
+        except ValueError:
+            print("Need safety_factor to be a scalar between 0 and 25")
+
+
+        if RadiativeCooling:
+            try:
+                floor_log_temp >= 4.0
+                break
+            except ValueError:
+                print("If RadiativeCooling==True, then floor_log_temp must be at least 4.0")
+
+    
+
 
 
     # Read in the atomic data to be used for the non-equilibrium
     # ionization calculations.
 
     AtomicData = read_atomic_data(elements, screen_output=False)
+            
 
     # The atomic data used for these calculations are stored in grids
     # that are a function of temperature at some resolution in
@@ -274,8 +333,36 @@ def cmeheat_track_plasma(
 
     # Get the interpolation function for radiative cooling
 
-    Lambda = get_cooling_function()
+    #Our volumetric radiaitve cooling rates per element per ion file \lambda
 
+    cool = os.path.exists('Power_atomdb_3.0.8.dat')
+
+    if not cool:
+        lorentz_power('3.0.8')
+        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
+    else:
+        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
+
+    #Abundance set. Using the Anders and Grevesse numbers (1989)
+    abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
+
+    #Inititialize 2D matrix which will store the respective cooling rates for each element-ion pair
+    fcool_matrix = np.zeros((153,53), dtype=float)
+
+    for idx, line in enumerate(p_cool):
+        if line[idx] != 'Z':
+            fcool_matrix[idx] = line.split()[:]
+        else:
+            cool_Te = np.array(line.split()[2:], dtype=float)
+
+    
+
+    scool_matrix = fcool_matrix[1:]
+
+    ion_states = np.arange(0,152)
+
+    Lambda = get_cooling_function()
+    
     # The time loop to calculate how the charge state distributions
     # change as the plasma blob moves away from the Sun.
 
@@ -310,11 +397,12 @@ def cmeheat_track_plasma(
         # temperature does not drop below a floor value.        
 
         # The tem
-
+        b = np.arange(51)
         if RadiativeCooling:
-            dT_rad = - dt * Lambda(temperature[i-1]) * \
-                (2.0/3.0)*density[i-1]*electron_density[i-1] / \
-                (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+            
+            dT_rad = - dt *Lambda(temperature[i-1]) * \
+            (2.0/3.0)*density[i-1]*electron_density[i-1] / \
+            (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
         else:
             dT_rad = 0.0
 
@@ -343,12 +431,18 @@ def cmeheat_track_plasma(
         # charge states will approach the equilibrium value for that
         # temperature.  
 
-        NewChargeStates = func_solver_eigenval(elements, 
-                                               AtomicData, 
-                                               mean_temperature, 
-                                               mean_electron_density, 
-                                               dt, 
-                                               ChargeStateList[i-1])
+        NewChargeStates = create_ChargeStates_dictionary(elements)
+        for element in elements:
+            Z = AtomicNumbers[element]
+            init_pop = ChargeStateList[i-1][element]
+
+            next_pop = solve_ionbal_eigen(Z,
+                                          mean_temperature,
+                                          init_pop=init_pop,
+                                          tau = mean_electron_density*dt,
+                                          datacache=dcache)
+            NewChargeStates[element] = next_pop.copy()
+        
 
         ChargeStateList.append(NewChargeStates.copy())
 
@@ -487,6 +581,45 @@ def cmeheat_track_plasma(
         print()
 
     return output
+
+def get_lambda(ionfrac, Te):
+    cool = os.path.exists('/home/mdupont/2017_Projects/ionica/NEI/Power_atomdb_3.0.8.dat')
+    if not cool:
+        lorentz_power('3.0.8')
+        p_cool = np.genfromtxt('../Power_atomdb_3.0.8.dat', dtype=None, delimiter=',') #our cooling coefficient (Power)
+    else:
+        p_cool = np.genfromtxt('../Power_atomdb_3.0.8.dat', dtype=None , delimiter=',')
+    abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
+    chg_list = []
+    som_matrix = np.zeros((153,53), dtype=float) #Matrix used to store our values for the cooling rates
+
+    for idx, line in enumerate(p_cool):
+        if line[idx] != 'Z':
+            chg_list.append(np.array(line.split()[:], dtype=float))
+            som_matrix[idx] = line.split()[:]
+        else:
+            Te = np.array(line.split()[2:], dtype=float)
+            
+    #nei_frac = cmeheat2.cmeheat_track_plasma2()
+    
+    rate_matrix = som_matrix[1:] #truncate matrix to exclude extraneous array of 0s
+
+    states = np.arange(0,152) #number of indicies in rate_matrix
+    ion_list = []
+    out = []
+    Lambda_dict ={} #intialize the atoms dictionary
+    for idx, val in enumerate(states):
+        zed = rate_matrix[idx][0] #The Z part for each element
+        ion = rate_matrix[idx][1] #The corresponding ion for each Z
+        cool_terms = rate_matrix[idx][2:] #The cooling_terms array that thus corresponds to each Z and z1
+        ion_list.append(ion)
+        
+        Lambda_dict [zed, ion] = {        #Creates a dictionary with tupled keys (Z,z1) which is called later
+            'cooling_terms': cool_terms
+        }
+
+    Lambda = np.sum
+    return Lambda(Te)
 
 
 def cmeheat_grid(
