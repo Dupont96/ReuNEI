@@ -18,6 +18,7 @@ import xarray as xr
 import sys
 import os
 
+from scipy import interpolate
 from astropy.io import fits
 from sunnei.core import func_index_te, func_dt_eigenval, func_solver_eigenval
 from sunnei.core import read_atomic_data, create_ChargeStates_dictionary, \
@@ -32,7 +33,8 @@ from pyatomdb.apec import solve_ionbal_eigen
 RSun = 6.957e5    # radius of the Sun in kilometers
 gamma = 5.0/3.0   # ratio of specific heats
 gamm1 = gamma-1.0 # 
-kB = 1.38e-16     # Boltman constant in ergs per Kelvin
+kB = 1.38e-16     # Boltzman constant in ergs per Kelvin
+
 
 Belements = ['H', 'He', 'C', 
             'N', 'O', 'Ne',
@@ -75,6 +77,7 @@ def cmeheat_track_plasma2(
     screen_output=True,
     quicklook=True,
     barplot=True,
+    CHIANTI=True,
     ):
     
     '''
@@ -83,7 +86,7 @@ def cmeheat_track_plasma2(
 
     Example
 
-    output = cmeheat_track_plasma2(log_initial_temp=6.4, 
+    output = sunnei.cmeheat_track_plasma2(log_initial_temp=6.4, 
                                         log_initial_dens=8.6,
                                         vfinal=2500.0,
                                         ExpansionExponent=-2.5)
@@ -333,42 +336,20 @@ def cmeheat_track_plasma2(
 
     # Get the interpolation function for radiative cooling
 
-    #Our volumetric radiaitve cooling rates per element per ion file \lambda
-
-    cool = os.path.exists('Power_atomdb_3.0.8.dat')
-
-    if not cool:
-        lorentz_power('3.0.8')
-        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
+    if CHIANTI:
+        Lambda = get_cooling_function()
     else:
-        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
+        Lambda = interp_lambda
 
-    #Abundance set. Using the Anders and Grevesse numbers (1989)
+    #Using Anders and Grevesse abundance set
     abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
-
-    #Inititialize 2D matrix which will store the respective cooling rates for each element-ion pair
-    fcool_matrix = np.zeros((153,53), dtype=float)
-
-    for idx, line in enumerate(p_cool):
-        if line[idx] != 'Z':
-            fcool_matrix[idx] = line.split()[:]
-        else:
-            cool_Te = np.array(line.split()[2:], dtype=float)
-
-    
-
-    scool_matrix = fcool_matrix[1:]
-
-    ion_states = np.arange(0,152)
-
-    Lambda = get_cooling_function()
     
     # The time loop to calculate how the charge state distributions
     # change as the plasma blob moves away from the Sun.
-
+    
+    
     i = 1
     dt = None
-
     while (i <= max_steps):
         
         # Adjust the time step
@@ -397,21 +378,53 @@ def cmeheat_track_plasma2(
         # temperature does not drop below a floor value.        
 
         # The tem
-        b = np.arange(51)
+        
+        i_tot = 0
+        nei_coeff = 0
+        
         if RadiativeCooling:
-            
-            dT_rad = - dt *Lambda(temperature[i-1]) * \
-            (2.0/3.0)*density[i-1]*electron_density[i-1] / \
-            (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+            if CHIANTI:
+                dT_rad = -dt*(2.0/3.0)*Lambda(temperature[i-1])*density[i-1]*electron_density[i-1] / \
+                (kB*(density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+            else:
+                const = (2.0/3.0)*electron_density[i-1] / (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+                for el in elements:
+                    Z = AtomicNumbers[el]
+                    ncharge = Z+1
+                    for z1 in range(ncharge):
+                        N_ion = ChargeStateList[i-1][el][z1]*abund[Z]*1.1*density[i-1]
+                        i_tot +=  N_ion#must account for  density of ions in system through time 
+                        nei_coeff += Lambda(Z,z1,temperature[i-1])*N_ion
+                       # print("Z=%i,z1=%i,Lambda=%e,N_ion=%e,abund=%e,ionfrac=%e, nei_coeff=%e"%\
+                        #    (Z, z1, Lambda(Z,z1,temperature[i-1]), N_ion, abund[Z], ChargeStateList[i-1][el][z1], nei_coeff))
+                N_tot = density[i-1]*(1.0+He_per_H)+electron_density[i-1]+i_tot
+                #print("nei_coeff=%e"%(nei_coeff))
+                #print("Ion Density: %e"%(i_tot))
+                #print("Total Particle Density: %e"%(N_tot))
+                #print("denom: %e"%(kB*N_tot))
+                #print("numerator: %e"%(dt*(2.0/3.0)*nei_coeff*electron_density[i-1]))
+                dT_rad = - dt*(2.0/3.0)*nei_coeff*electron_density[i-1]/ \
+                (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+
+            #print("density=%e"%(density[i-1]))
+            #print("electron density=%e"%(electron_density[i-1]))
+            #print("temperature=%e"%(temperature[i-1]))
+                    
+                    
         else:
             dT_rad = 0.0
-
+        
+     
+        print("time step:",dt)
+        print("cooling:",dT_rad)
         temperature[i] = temperature[i-1]*(density[i]/density[i-1])**gamm1 + \
             dT_rad
-               
+        
+        print("Temperature:",temperature[i])
+        
         if temperature[i] < 10**floor_log_temp:
             temperature[i] = 10**floor_log_temp
-
+        #zzz=raw_input("I am stopped")
         # The ionization time advance requires a mean temperature and
         # a mean electron density.  Average these quantities from the
         # previous and current time indices.  To calculate the ratio
@@ -431,20 +444,30 @@ def cmeheat_track_plasma2(
         # charge states will approach the equilibrium value for that
         # temperature.  
 
-        NewChargeStates = create_ChargeStates_dictionary(elements)
-        for element in elements:
-            Z = AtomicNumbers[element]
-            init_pop = ChargeStateList[i-1][element]
+        if CHIANTI:
+            NewChargeStates = func_solver_eigenval(elements, 
+                                               AtomicData, 
+                                               mean_temperature, 
+                                               mean_electron_density, 
+                                               dt, 
+                                               ChargeStateList[i-1])
 
-            next_pop = solve_ionbal_eigen(Z,
-                                          mean_temperature,
-                                          init_pop=init_pop,
-                                          tau = mean_electron_density*dt,
-                                          datacache=dcache)
-            NewChargeStates[element] = next_pop.copy()
-        
+            ChargeStateList.append(NewChargeStates.copy())
+        else:
+            NewChargeStates = create_ChargeStates_dictionary(elements)
+            for element in elements:
+                Z = AtomicNumbers[element]
+                init_pop = ChargeStateList[i-1][element]
 
-        ChargeStateList.append(NewChargeStates.copy())
+                next_pop = solve_ionbal_eigen(Z,
+                                            mean_temperature,
+                                            init_pop=init_pop,
+                                            tau = mean_electron_density*dt,
+                                            datacache=dcache)
+                NewChargeStates[element] = next_pop.copy()
+            
+
+            ChargeStateList.append(NewChargeStates.copy())
 
         # Since the charge state distributions for this step have been
         # found, we can finally calculate the electron number density.
@@ -461,6 +484,7 @@ def cmeheat_track_plasma2(
         else:
             i = i + 1
 
+    
     '''
     The charge state information that was just created is a list of
     dictionaries of NumPy arrays.  The way to access data is:
@@ -580,47 +604,73 @@ def cmeheat_track_plasma2(
         print("************************************************************************")
         print()
 
+    print(temperature)
     return output
 
-def get_lambda(ionfrac, Te):
-    cool = os.path.exists('/home/mdupont/2017_Projects/ionica/NEI/Power_atomdb_3.0.8.dat')
+
+def get_lambda():
+    cool = os.path.exists('Power_atomdb_3.0.8.dat')
     if not cool:
         lorentz_power('3.0.8')
-        p_cool = np.genfromtxt('../Power_atomdb_3.0.8.dat', dtype=None, delimiter=',') #our cooling coefficient (Power)
+        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
     else:
-        p_cool = np.genfromtxt('../Power_atomdb_3.0.8.dat', dtype=None , delimiter=',')
-    abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
-    chg_list = []
-    som_matrix = np.zeros((153,53), dtype=float) #Matrix used to store our values for the cooling rates
+        p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
+    log_matrix = np.zeros((153,53), dtype=float)
 
-    for idx, line in enumerate(p_cool):
-        if line[idx] != 'Z':
-            chg_list.append(np.array(line.split()[:], dtype=float))
-            som_matrix[idx] = line.split()[:]
-        else:
-            Te = np.array(line.split()[2:], dtype=float)
-            
-    #nei_frac = cmeheat2.cmeheat_track_plasma2()
     
-    rate_matrix = som_matrix[1:] #truncate matrix to exclude extraneous array of 0s
+    for i, line in enumerate(p_cool):
+        if line[i] != 'Z':
+            log_matrix[i] = line.split()[:]
+        else:
+            LogT = np.array(line.split()[2:], dtype=float)
+    log_rate = log_matrix[1:]
 
-    states = np.arange(0,152) #number of indicies in rate_matrix
-    ion_list = []
-    out = []
-    Lambda_dict ={} #intialize the atoms dictionary
-    for idx, val in enumerate(states):
-        zed = rate_matrix[idx][0] #The Z part for each element
-        ion = rate_matrix[idx][1] #The corresponding ion for each Z
-        cool_terms = rate_matrix[idx][2:] #The cooling_terms array that thus corresponds to each Z and z1
-        ion_list.append(ion)
-        
-        Lambda_dict [zed, ion] = {        #Creates a dictionary with tupled keys (Z,z1) which is called later
-            'cooling_terms': cool_terms
-        }
+    T = 10**LogT
+    c_matrix = 10**log_matrix[1:]
 
-    Lambda = np.sum
-    return Lambda(Te)
+    #Declare Lambda dictionary storing the respective cooling rates per element-ion pair
+    Lambda = {}
+    for idx, val in enumerate(log_rate):
+        zed, ion = log_rate[idx][:2]
+        cooling_terms = c_matrix[idx][2:]
+        Lambda[int(zed), int(ion)] = cooling_terms
 
+    ret={}
+    ret['lam']=Lambda
+    ret['T']=T        
+    return ret
+
+
+def interp_lambda(Z,z1,Te):
+   val = get_lambda()
+
+   F = np.interp(Te, val['T'], val['lam'][Z,z1])
+   
+   return F
+
+
+'''  
+def yes():
+    i = 1
+    Lambda = get_cool
+    abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
+    a = []
+    Te = np.logspace(4.0,9.0,51)
+    
+    for el in elements:
+        Z = Zlist[el]
+        ncharge = Z+1
+        for z1 in range(ncharge):
+            calc = Lambda(Z,z1)*abund[Z]
+            a.append(calc)
+    a = np.array(a)
+
+    b = a.sum(axis=0)
+    
+    return interpolate.interp1d(Te, b, fill_value=0.0)
+    
+yes() 
+''' 
 
 def cmeheat_grid(
     vfinal_range = [500.0, 2000.0],

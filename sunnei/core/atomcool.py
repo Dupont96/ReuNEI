@@ -36,7 +36,7 @@ def atomdb_cooling():
             'cooling_terms': cool_terms
         }
     sum_list = []
-    for Z in range(1,27):
+    for Z in range([1,2,6,7,8,9,10]):
         for z1 in range(Z+1):
             lol = sum(Lambda[Z,z1]['cooling_terms'])
             sum_list.append(lol)
