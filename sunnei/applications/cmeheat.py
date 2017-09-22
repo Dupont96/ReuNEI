@@ -59,7 +59,7 @@ AtomicNumbers = pd.Series(np.arange(28)+1,
 He_per_H = 0.1 
 dcache = {}
 
-def cmeheat_track_plasma2(
+def cmeheat_track_plasma(
     initial_height       = 0.1,     # in solar radii
     final_height         = 5.0,     # height to output charge states
     log_initial_temp     = 6.0,     # logarithm of initial temperature in K
@@ -77,7 +77,7 @@ def cmeheat_track_plasma2(
     screen_output=True,
     quicklook=True,
     barplot=True,
-    CHIANTI=True,
+    Database='chianti',
     ):
     
     '''
@@ -86,7 +86,7 @@ def cmeheat_track_plasma2(
 
     Example
 
-    output = sunnei.cmeheat_track_plasma2(log_initial_temp=6.4, 
+    output = sunnei.cmeheat_track_plasma(log_initial_temp=6.4, 
                                         log_initial_dens=8.6,
                                         vfinal=2500.0,
                                         ExpansionExponent=-2.5)
@@ -336,9 +336,9 @@ def cmeheat_track_plasma2(
 
     # Get the interpolation function for radiative cooling
 
-    if CHIANTI:
+    if Database =='chianti':
         Lambda = get_cooling_function()
-    else:
+    elif Database =='atomdb':
         Lambda = interp_lambda
 
     #Using Anders and Grevesse abundance set
@@ -383,10 +383,10 @@ def cmeheat_track_plasma2(
         nei_coeff = 0
         
         if RadiativeCooling:
-            if CHIANTI:
+            if Database == 'chianti':
                 dT_rad = -dt*(2.0/3.0)*Lambda(temperature[i-1])*density[i-1]*electron_density[i-1] / \
                 (kB*(density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
-            else:
+            elif Database == 'atomdb':
                 const = (2.0/3.0)*electron_density[i-1] / (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
                 for el in elements:
                     Z = AtomicNumbers[el]
@@ -444,7 +444,7 @@ def cmeheat_track_plasma2(
         # charge states will approach the equilibrium value for that
         # temperature.  
 
-        if CHIANTI:
+        if Database== 'chianti':
             NewChargeStates = func_solver_eigenval(elements, 
                                                AtomicData, 
                                                mean_temperature, 
@@ -453,7 +453,7 @@ def cmeheat_track_plasma2(
                                                ChargeStateList[i-1])
 
             ChargeStateList.append(NewChargeStates.copy())
-        else:
+        elif Database == 'atomdb':
             NewChargeStates = create_ChargeStates_dictionary(elements)
             for element in elements:
                 Z = AtomicNumbers[element]
