@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pyatomdb
 import glob
-import xarray as xr
 import sys
 import os
 
