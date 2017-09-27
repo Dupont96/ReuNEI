@@ -392,10 +392,10 @@ def cmeheat_track_plasma(
                     ncharge = Z+1
                     for z1 in range(ncharge):
                         N_ion = ChargeStateList[i-1][el][z1]*abund[Z]*1.1*density[i-1]
-                        i_tot +=  N_ion#must account for  density of ions in system through time 
+                        i_tot +=  N_ion #must account for  density of ions in system through time 
                         nei_coeff += Lambda(Z,z1,temperature[i-1])*N_ion
                        # print("Z=%i,z1=%i,Lambda=%e,N_ion=%e,abund=%e,ionfrac=%e, nei_coeff=%e"%\
-                        #    (Z, z1, Lambda(Z,z1,temperature[i-1]), N_ion, abund[Z], ChargeStateList[i-1][el][z1], nei_coeff))
+                       #       (Z, z1, Lambda(Z,z1,temperature[i-1]), N_ion, abund[Z], ChargeStateList[i-1][el][z1], nei_coeff))
                 N_tot = density[i-1]*(1.0+He_per_H)+electron_density[i-1]+i_tot
                 #print("nei_coeff=%e"%(nei_coeff))
                 #print("Ion Density: %e"%(i_tot))
@@ -646,30 +646,6 @@ def interp_lambda(Z,z1,Te):
    F = np.interp(Te, val['T'], val['lam'][Z,z1])
    
    return F
-
-
-'''  
-def yes():
-    i = 1
-    Lambda = get_cool
-    abund = pyatomdb.atomdb.get_abundance(abundset='AG89')
-    a = []
-    Te = np.logspace(4.0,9.0,51)
-    
-    for el in elements:
-        Z = Zlist[el]
-        ncharge = Z+1
-        for z1 in range(ncharge):
-            calc = Lambda(Z,z1)*abund[Z]
-            a.append(calc)
-    a = np.array(a)
-
-    b = a.sum(axis=0)
-    
-    return interpolate.interp1d(Te, b, fill_value=0.0)
-    
-yes() 
-''' 
 
 def cmeheat_grid(
     vfinal_range = [500.0, 2000.0],
