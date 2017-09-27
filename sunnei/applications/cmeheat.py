@@ -414,12 +414,12 @@ def cmeheat_track_plasma(
             dT_rad = 0.0
         
      
-        print("time step:",dt)
-        print("cooling:",dT_rad)
+        #print("time step:",dt)
+        #print("cooling:",dT_rad)
         temperature[i] = temperature[i-1]*(density[i]/density[i-1])**gamm1 + \
             dT_rad
         
-        print("Temperature:",temperature[i])
+        #print("Temperature:",temperature[i])
         
         if temperature[i] < 10**floor_log_temp:
             temperature[i] = 10**floor_log_temp
