@@ -13,8 +13,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import pyatomdb
-import glob
-import sys
 import os
 
 from scipy import interpolate
@@ -608,7 +606,7 @@ def cmeheat_track_plasma(
 
 
 def get_lambda():
-    cool = os.path.exists('Power_atomdb_3.0.8.dat')
+    cool = os.path.exists('Power_atomdb_3.0.8.dat') #Our power
     if not cool:
         lorentz_power('3.0.8')
         p_cool = np.genfromtxt('Power_atomdb_3.0.8.dat', dtype=None, delimiter=',')
