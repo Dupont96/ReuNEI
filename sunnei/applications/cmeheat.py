@@ -32,12 +32,6 @@ gamma = 5.0/3.0   # ratio of specific heats
 gamm1 = gamma-1.0 # 
 kB = 1.38e-16     # Boltzman constant in ergs per Kelvin
 
-
-Belements = ['H', 'He', 'C', 
-            'N', 'O', 'Ne',
-            'Mg', 'Si', 'S', 
-            'Ar', 'Ca', 'Fe']
-
 # This pandas series allows a shortcut to finding the atomic number of
 # an element.  For example, AtomicNumbers['Fe'] will return 26.  The
 # number of charge states for an element will be the atomic number
