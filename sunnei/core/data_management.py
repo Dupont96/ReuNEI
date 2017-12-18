@@ -16,7 +16,7 @@ def read_atomic_data(elements=['H', 'He', 'C',     # twelve most abundant elemen
                                'N', 'O', 'Ne',
                                'Mg', 'Si', 'S', 
                                'Ar', 'Ca', 'Fe', ] , 
-                     data_directory= '/home/mdupont/2017_Projects/ionica/ReuNEI/sunnei/AtomicData',   # not robust!  Works when calling from the directory that sunnei is in
+                     data_directory= '/home/mdupont/research/ReuNEI/sunnei/AtomicData',   # not robust!  Works when calling from the directory that sunnei is in
                      screen_output=False):
 
     '''

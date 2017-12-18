@@ -375,10 +375,11 @@ def cmeheat_track_plasma(
         
         if RadiativeCooling:
             if Database == 'chianti':
-                dT_rad = -dt*(2.0/3.0)*Lambda(temperature[i-1])*density[i-1]*electron_density[i-1] / \
-                (kB*(density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+                dT_rad = - dt * Lambda(temperature[i-1]) * \
+                (2.0/3.0)*density[i-1]*electron_density[i-1] / \
+                (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+                
             elif Database == 'atomdb':
-                const = (2.0/3.0)*electron_density[i-1] / (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
                 for el in elements:
                     Z = AtomicNumbers[el]
                     ncharge = Z+1
@@ -386,16 +387,17 @@ def cmeheat_track_plasma(
                         N_ion = ChargeStateList[i-1][el][z1]*abund[Z]*1.1*density[i-1]
                         i_tot +=  N_ion #must account for  density of ions in system through time 
                         nei_coeff += Lambda(Z,z1,temperature[i-1])*N_ion
-                       # print("Z=%i,z1=%i,Lambda=%e,N_ion=%e,abund=%e,ionfrac=%e, nei_coeff=%e"%\
-                       #       (Z, z1, Lambda(Z,z1,temperature[i-1]), N_ion, abund[Z], ChargeStateList[i-1][el][z1], nei_coeff))
+                        #print("Z=%i,z1=%i,Lambda=%e,N_ion=%e,abund=%e,ionfrac=%e, nei_coeff=%e"%\
+                        #    (Z, z1, Lambda(Z,z1,temperature[i-1]), N_ion, abund[Z], ChargeStateList[i-1][el][z1], nei_coeff))
                 N_tot = density[i-1]*(1.0+He_per_H)+electron_density[i-1]+i_tot
+                #print('total ions:',i_tot)
                 #print("nei_coeff=%e"%(nei_coeff))
                 #print("Ion Density: %e"%(i_tot))
                 #print("Total Particle Density: %e"%(N_tot))
                 #print("denom: %e"%(kB*N_tot))
                 #print("numerator: %e"%(dt*(2.0/3.0)*nei_coeff*electron_density[i-1]))
                 dT_rad = - dt*(2.0/3.0)*nei_coeff*electron_density[i-1]/ \
-                (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]))
+                (kB * (density[i-1]*(1.0+He_per_H)+electron_density[i-1]+i_tot))
 
             #print("density=%e"%(density[i-1]))
             #print("electron density=%e"%(electron_density[i-1]))
@@ -407,11 +409,11 @@ def cmeheat_track_plasma(
         
      
         #print("time step:",dt)
-        #print("cooling:",dT_rad)
+        print("cooling:",dT_rad)
         temperature[i] = temperature[i-1]*(density[i]/density[i-1])**gamm1 + \
             dT_rad
         
-        #print("Temperature:",temperature[i])
+        print("Temperature:",temperature[i])
         
         if temperature[i] < 10**floor_log_temp:
             temperature[i] = 10**floor_log_temp
@@ -615,6 +617,7 @@ def get_lambda():
         else:
             LogT = np.array(line.split()[2:], dtype=float)
     log_rate = log_matrix[1:]
+
 
     T = 10**LogT
     c_matrix = 10**log_matrix[1:]
